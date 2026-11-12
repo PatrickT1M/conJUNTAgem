@@ -425,11 +425,11 @@ $('saveCfg').onclick=async()=>{
   $('note').textContent='Datas salvas! 💕';render();
 };
 
-function startLocal(){
+function startLocal(why){
   localMode=true;uid='me';
   try{const c=JSON.parse(safeGet('cfg')||'null');if(c)cfg=c}catch(e){}
   try{const m=JSON.parse(safeGet('marks')||'{}');for(const k in m)marks[k]=Array.isArray(m[k])?{me:''}:m[k]}catch(e){}
-  $('note').textContent='Modo sozinho: as marcações ficam só neste aparelho. Falta colar o config do Firebase no arquivo para marcarem juntos 💕';
+  $('note').textContent='[v3] Modo sozinho: as marcações ficam só neste aparelho. Motivo: '+(why||'desconhecido')+'. Abra o ⚙️ para ver isto.';
   render();
 }
 
@@ -460,7 +460,8 @@ $('stVint').onclick=()=>swapLook('vintage');
 applyStyle();
 (function(){
   try{
-    if(!window.firebase||!FIREBASE_CONFIG.apiKey||FIREBASE_CONFIG.apiKey.startsWith('COLE')){startLocal();return}
+    if(!window.firebase){startLocal('o Firebase não carregou (bloqueador de anúncios ou rede?)');return}
+    if(!FIREBASE_CONFIG.apiKey||FIREBASE_CONFIG.apiKey.startsWith('COLE')){startLocal('config do Firebase não preenchido');return}
     firebase.initializeApp(FIREBASE_CONFIG);
     dbm=firebase.firestore();
     const w=safeGet('who');uid=(w==='Patrick'||w==='Nataly')?w:null;
@@ -472,8 +473,8 @@ applyStyle();
       snap.docs.forEach(x=>{const d=x.data();if(d&&d.date&&d.uid){(m[d.date]||(m[d.date]={}))[d.uid]=typeof d.msg==='string'?d.msg:'';ats[d.date+'|'+d.uid]=d.at||0}});
       marks=m;render();notifyNew();
     },()=>{clearTimeout(timer)});
-    render();
-  }catch(e){startLocal()}
+    $('note').textContent='[v3] Conectado ao Firebase ✔';render();
+  }catch(e){startLocal('erro: '+(e&&e.message||e))}
 })();
 </script>
 </body>
