@@ -172,6 +172,18 @@ body.fade{opacity:0}
 [data-style="fofo"] details{background:var(--card);border:2px solid var(--out);border-radius:16px;box-shadow:3px 3px 0 var(--peach);font-family:'Space Mono',monospace;font-size:.8rem}
 [data-style="fofo"] .box{border:2px solid var(--out);border-radius:18px;box-shadow:4px 4px 0 var(--peach);padding:0 18px 20px;overflow:hidden}
 [data-style="fofo"] .their{border:2px dotted var(--out);border-radius:12px;background:var(--card)}
+.notice{display:none;margin-top:14px;text-align:center;border:2px dashed var(--pink);border-radius:16px;padding:10px 12px;background:var(--card);color:var(--ink);font-size:.95rem}
+.notice.on{display:block}
+.notice button{font:inherit;margin:8px 4px 0;padding:6px 16px;border-radius:99px;border:2px solid var(--pink);background:var(--pink2);color:var(--ink);cursor:pointer}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,30px);opacity:0;pointer-events:none;background:var(--ink);color:var(--card);padding:10px 16px;border-radius:99px;max-width:90vw;text-align:center;font-size:.9rem;transition:.4s;z-index:30}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.ini{display:flex;justify-content:center;gap:16px;font-size:.58rem;color:var(--soft);letter-spacing:.08em;text-transform:uppercase;margin-top:1px}
+.ini span.on{color:var(--pink);font-weight:700}
+[data-style="fofo"] .notice{border:2px dotted var(--out);border-radius:14px;font-size:.85rem}
+[data-style="fofo"] .notice button{border-color:var(--out);background:var(--blue);font-family:'Space Mono',monospace;font-weight:700;font-size:.8rem;text-transform:uppercase}
+[data-style="vintage"] .notice{border:1px solid var(--ink);border-radius:0;outline:1px solid var(--line);outline-offset:-4px;font-style:italic;padding:12px}
+[data-style="vintage"] .notice button{border:1px solid var(--ink);border-radius:0;background:var(--teal);color:#fff;font-style:normal;font-family:'Bebas Neue',sans-serif;letter-spacing:.14em}
+[data-style="vintage"] .toast{border-radius:0;font-style:italic}
 .modal{position:fixed;inset:0;background:rgba(90,42,65,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
 .modal.open{display:flex}
 .box{background:var(--card);border-radius:26px;padding:20px 18px;width:100%;max-width:420px;box-shadow:var(--shadow);max-height:90vh;overflow:auto}
@@ -206,6 +218,7 @@ button.link{background:none;border:0;font:inherit;color:var(--soft);text-decorat
     <div class="pct" id="pct"></div>
   </div>
 
+  <div class="notice" id="notice"></div>
   <div class="sec"><h3 id="secT">Os nossos dias</h3><p id="secP">para o leitor distinto e apaixonado</p></div>
   <div class="grid" id="grid"></div>
   <div class="legend">Toque no dia de hoje (ou de um dia que já passou) para marcar seu 💗 e deixar um recadinho 💌. O recado só aparece para o outro quando marcar o mesmo dia. Quando os dois marcam, o dia fica rosinha! 🎀</div>
@@ -221,6 +234,7 @@ button.link{background:none;border:0;font:inherit;color:var(--soft);text-decorat
   </details>
 </div>
 <div class="party" id="party"></div>
+<div class="toast" id="toast"></div>
 <div class="modal" id="modal"><div class="box">
   <div class="tbar"><span>recadinho.msg</span><i>–</i><i id="mX">×</i></div>
   <h2 id="mTitle"></h2>
@@ -234,6 +248,54 @@ button.link{background:none;border:0;font:inherit;color:var(--soft);text-decorat
 <script>
 const DEF={start:'2026-11-12',end:'2026-12-15'};
 let cfg={...DEF}, marks={}, uid=null, dbm=null, localMode=false;
+let names={}, ats={}, prevOther=new Set(), firstLoad=true, toastT;
+function otherName(){
+  for(const k in names){if(k!==uid&&names[k])return names[k]}
+  const m=names[uid];return m==='Patrick'?'Nataly':m==='Nataly'?'Patrick':'seu amorzinho';
+}
+const ini=n=>n&&n!=='seu amorzinho'?n[0]:'♥';
+function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),5500)}
+async function setName(nm){
+  try{await dbm.collection('people').doc(uid).set({uid:uid,name:nm});names[uid]=nm;render()}
+  catch(e){$('note').textContent='Não consegui salvar seu nome 🥺'}
+}
+function renderNotice(){
+  const n=$('notice');
+  if(localMode||!uid){n.className='notice';return}
+  if(!names[uid]){
+    n.className='notice on';n.textContent='';
+    const t=document.createElement('div');t.textContent='Quem é você? Assim eu mostro quem marcou cada dia '+S('💕','');
+    n.append(t);
+    ['Patrick','Nataly'].forEach(nm=>{const b=document.createElement('button');b.textContent=nm;b.onclick=()=>setName(nm);n.append(b)});
+    return;
+  }
+  const t=todayIso();
+  if(!days().includes(t)){n.className='notice';return}
+  const mp=marks[t]||{}, mine=uid in mp, others=Object.keys(mp).filter(x=>x!==uid), o=otherName();
+  const hasMsg=others.some(x=>mp[x]);
+  let msg;
+  if(mine&&others.length)msg=S('💗 ','')+'Vocês dois já marcaram hoje!'+(hasMsg?' Toque em hoje para ler o recado de '+o+'.':'');
+  else if(others.length)msg=S('💌 ','')+o+' já marcou hoje!'+(hasMsg?' Deixou um recadinho: marque o dia para abrir.':' Marque o seu também.');
+  else if(mine)msg=S('✨ ','')+'Você já marcou hoje. Agora é esperar '+o+' marcar.';
+  else msg=S('🌷 ','')+'Ninguém marcou hoje ainda. Que tal ser o primeiro?';
+  n.className='notice on';n.textContent=msg;
+}
+function notifyNew(){
+  const cur=new Set(), fresh=[];
+  const seen=Number(safeGet('seen')||0);
+  for(const ds in marks)for(const u in marks[ds]){
+    if(u===uid)continue;
+    const key=ds+'|'+u;cur.add(key);
+    if(firstLoad){if(seen&&(ats[key]||0)>seen)fresh.push({ds,msg:marks[ds][u]})}
+    else if(!prevOther.has(key))fresh.push({ds,msg:marks[ds][u]});
+  }
+  prevOther=cur;firstLoad=false;
+  safeSet('seen',String(Date.now()));
+  if(!fresh.length)return;
+  const o=otherName();
+  if(fresh.length===1){const d=parse(fresh[0].ds);toast(o+' marcou o dia '+d.getDate()+'/'+(d.getMonth()+1)+S(' 💗','')+(fresh[0].msg?' e deixou um recadinho'+S(' 💌',''):''))}
+  else toast(o+' marcou '+fresh.length+' dias'+S(' 💗','')+'!');
+}
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -279,6 +341,7 @@ function render(){
     const n=document.createElement('div');n.className='n';n.textContent=d.getDate();
     const m=document.createElement('div');m.className='m';m.textContent=MN[d.getMonth()];
     b.append(w,n,m,h);
+    if(names[uid]){const r=document.createElement('div');r.className='ini';const x=document.createElement('span');x.textContent=ini(names[uid]);if(mine)x.className='on';const y=document.createElement('span');y.textContent=ini(otherName());if(others>0)y.className='on';r.append(x,y);b.append(r)}
     if(ids.some(x=>x!==uid&&mp[x])){const e=document.createElement('div');e.className='tag';e.textContent=mine?S('💌 recado!','recado'):S('💌 tem recado','tem recado');b.append(e)}
     if(ds===cfg.end){const tg=document.createElement('div');tg.className='tag';tg.textContent=S('🎀 nosso dia','nosso dia');b.append(tg)}
     else if(ds===t){const tg=document.createElement('div');tg.className='tag';tg.textContent='hoje';b.append(tg)}
@@ -286,6 +349,7 @@ function render(){
     g.append(b);
   });
   $('inStart').value=cfg.start;$('inEnd').value=cfg.end;
+  renderNotice();
   if($('modal').classList.contains('open'))fillModal();
 }
 
@@ -311,7 +375,7 @@ async function setMark(ds,on,msg){
   }
   try{
     const ref=dbm.collection('marks').doc(ds+'__'+uid);
-    if(on)await ref.set({date:ds,uid:uid,msg:msg||''});else await ref.delete();
+    if(on)await ref.set({date:ds,uid:uid,msg:msg||'',at:ats[ds+'|'+uid]||Date.now()});else await ref.delete();
     return true;
   }catch(e){$('mNote').textContent='Não consegui salvar agora, tente de novo 🥺';return false}
 }
@@ -328,9 +392,9 @@ function fillModal(){
   const other=Object.keys(mp).filter(x=>x!==uid);
   const msg=other.map(x=>mp[x]).find(x=>x)||'';
   const box=$('mTheirs');
-  if(!other.length)box.textContent='🌷 O outro ainda não marcou este dia. Seu recado vai ficar guardadinho até lá!';
-  else if(!msg)box.textContent='💗 O outro já marcou este dia, mas não deixou recado.';
-  else box.textContent='💌 Recado do seu amorzinho:\n'+msg;
+  if(!other.length)box.textContent='🌷 '+otherName()+' ainda não marcou este dia. Seu recado vai ficar guardadinho até lá!';
+  else if(!msg)box.textContent='💗 '+otherName()+' já marcou este dia, mas não deixou recado.';
+  else box.textContent='💌 Recado de '+otherName()+':\n'+msg;
 }
 function closeModal(){$('modal').classList.remove('open');curDay=null;pendingMark=null}
 $('mSave').onclick=async()=>{
@@ -392,11 +456,12 @@ applyStyle();
     if(!uid){startLocal();return}
     let timer=setTimeout(()=>{if(!Object.keys(marks).length)$('note').textContent='Carregando as marcações...'},10000);
     dbm.doc('config/main').onSnapshot(s=>{if(s.exists){const d=s.data();if(d&&d.start&&d.end){cfg={start:d.start,end:d.end};render()}}});
+    dbm.collection('people').onSnapshot(s=>{const nn={};s.docs.forEach(x=>{const d=x.data();if(d&&d.uid&&d.name)nn[d.uid]=d.name});names=nn;render()},()=>{});
     dbm.collection('marks').onSnapshot(snap=>{
       clearTimeout(timer);
       const m={};
-      snap.docs.forEach(x=>{const d=x.data();if(d&&d.date&&d.uid){(m[d.date]||(m[d.date]={}))[d.uid]=typeof d.msg==='string'?d.msg:''}});
-      marks=m;render();
+      snap.docs.forEach(x=>{const d=x.data();if(d&&d.date&&d.uid){(m[d.date]||(m[d.date]={}))[d.uid]=typeof d.msg==='string'?d.msg:'';ats[d.date+'|'+d.uid]=d.at||0}});
+      marks=m;render();notifyNew();
     },()=>{clearTimeout(timer)});
   }catch(e){startLocal()}
 })();
