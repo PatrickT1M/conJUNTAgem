@@ -245,23 +245,32 @@ button.link{background:none;border:0;font:inherit;color:var(--soft);text-decorat
   <div class="note" id="mNote"></div>
 </div></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyDJ3QiG_8iRYDPeYxNlNt-QL4JldSUgBZ0",
+  authDomain:"conjuntagem.firebaseapp.com",
+  projectId:"conjuntagem",
+  storageBucket:"conjuntagem.firebasestorage.app",
+  messagingSenderId:"706486806850",
+  appId:"1:706486806850:web:cee1c6e45bb1a1e1f0c0db"
+};
 const DEF={start:'2026-11-12',end:'2026-12-15'};
 let cfg={...DEF}, marks={}, uid=null, dbm=null, localMode=false;
-let names={}, ats={}, prevOther=new Set(), firstLoad=true, toastT;
+let names={Patrick:'Patrick',Nataly:'Nataly'}, ats={}, prevOther=new Set(), firstLoad=true, toastT;
 function otherName(){
   for(const k in names){if(k!==uid&&names[k])return names[k]}
   const m=names[uid];return m==='Patrick'?'Nataly':m==='Nataly'?'Patrick':'seu amorzinho';
 }
 const ini=n=>n&&n!=='seu amorzinho'?n[0]:'♥';
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('on'),5500)}
-async function setName(nm){
-  try{await dbm.collection('people').doc(uid).set({uid:uid,name:nm});names[uid]=nm;render()}
-  catch(e){$('note').textContent='Não consegui salvar seu nome 🥺'}
+function setName(nm){
+  uid=nm;safeSet('who',nm);render();notifyNew();
 }
 function renderNotice(){
   const n=$('notice');
-  if(localMode||!uid){n.className='notice';return}
+  if(localMode){n.className='notice';return}
   if(!names[uid]){
     n.className='notice on';n.textContent='';
     const t=document.createElement('div');t.textContent='Quem é você? Assim eu mostro quem marcou cada dia '+S('💕','');
@@ -281,6 +290,7 @@ function renderNotice(){
   n.className='notice on';n.textContent=msg;
 }
 function notifyNew(){
+  if(!uid||localMode)return;
   const cur=new Set(), fresh=[];
   const seen=Number(safeGet('seen')||0);
   for(const ds in marks)for(const u in marks[ds]){
@@ -361,6 +371,7 @@ function confetti(){
 let curDay=null, pendingMark=null;
 function openDay(ds){
   if(ds>todayIso())return;
+  if(!uid){renderNotice();toast('Escolha quem você é primeiro'+S(' 💕',''));return}
   curDay=ds;
   const mine=!!(marks[ds]&&uid in marks[ds]);
   if(!mine){confetti();pendingMark=ds;setMark(ds,true,'');}
@@ -418,7 +429,7 @@ function startLocal(){
   localMode=true;uid='me';
   try{const c=JSON.parse(safeGet('cfg')||'null');if(c)cfg=c}catch(e){}
   try{const m=JSON.parse(safeGet('marks')||'{}');for(const k in m)marks[k]=Array.isArray(m[k])?{me:''}:m[k]}catch(e){}
-  $('note').textContent='Modo sozinho: as marcações ficam só neste aparelho. Abra pelo link compartilhado para marcarem juntos 💕';
+  $('note').textContent='Modo sozinho: as marcações ficam só neste aparelho. Falta colar o config do Firebase no arquivo para marcarem juntos 💕';
   render();
 }
 
@@ -447,47 +458,23 @@ function popCards(){const g=$('grid');g.classList.remove('pop');void g.offsetWid
 $('stFofo').onclick=()=>swapLook('fofo');
 $('stVint').onclick=()=>swapLook('vintage');
 applyStyle();
-(async()=>{
+(function(){
   try{
-    const user=await claude.use('user');
-    dbm=await claude.use('db');
-    if(!dbm||!user){startLocal();return}
-    uid=await user.id();
-    if(!uid){startLocal();return}
+    if(!window.firebase||!FIREBASE_CONFIG.apiKey||FIREBASE_CONFIG.apiKey.startsWith('COLE')){startLocal();return}
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dbm=firebase.firestore();
+    const w=safeGet('who');uid=(w==='Patrick'||w==='Nataly')?w:null;
     let timer=setTimeout(()=>{if(!Object.keys(marks).length)$('note').textContent='Carregando as marcações...'},10000);
-    dbm.doc('config/main').onSnapshot(s=>{if(s.exists){const d=s.data();if(d&&d.start&&d.end){cfg={start:d.start,end:d.end};render()}}});
-    dbm.collection('people').onSnapshot(s=>{const nn={};s.docs.forEach(x=>{const d=x.data();if(d&&d.uid&&d.name)nn[d.uid]=d.name});names=nn;render()},()=>{});
+    dbm.doc('config/main').onSnapshot(s=>{if(s.exists){const d=s.data();if(d&&d.start&&d.end){cfg={start:d.start,end:d.end};render()}}},()=>{});
     dbm.collection('marks').onSnapshot(snap=>{
       clearTimeout(timer);
       const m={};
       snap.docs.forEach(x=>{const d=x.data();if(d&&d.date&&d.uid){(m[d.date]||(m[d.date]={}))[d.uid]=typeof d.msg==='string'?d.msg:'';ats[d.date+'|'+d.uid]=d.at||0}});
       marks=m;render();notifyNew();
     },()=>{clearTimeout(timer)});
+    render();
   }catch(e){startLocal()}
 })();
 </script>
 </body>
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyDJ3QiG_8iRYDPeYxNlNt-QL4JldSUgBZ0",
-    authDomain: "conjuntagem.firebaseapp.com",
-    projectId: "conjuntagem",
-    storageBucket: "conjuntagem.firebasestorage.app",
-    messagingSenderId: "706486806850",
-    appId: "1:706486806850:web:cee1c6e45bb1a1e1f0c0db",
-    measurementId: "G-NGVXW13HRK"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
 </html>
